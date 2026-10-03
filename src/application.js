@@ -662,6 +662,10 @@ function startApplication(birbPixels, featherPixels, hatsPixels) {
 		if (currentState === States.IDLE) {
 			if (focusedElement && !isWithinHorizontalBounds()) {
 				flyToElement();
+			} else if (focusedElement && !isFocusedElementVisible()) {
+				// Keep the flight from starting off screen
+				birdY = Math.min(birdY, getWindowHeight());
+				flyToElement();
 			}
 			birdY = getFocusedY();
 		} else if (currentState === States.FLYING) {
@@ -1362,6 +1366,37 @@ function startApplication(birbPixels, featherPixels, hatsPixels) {
 		}
 	}
 
+	/**
+	 * Get the vertical range of the page in which an element can be seen, taking
+	 * scrolling ancestors into account (e.g. a feed scrolling below a header)
+	 * @param {Element} element
+	 * @returns {{top: number, bottom: number}}
+	 */
+	function getVisibleRange(element) {
+		let top = 0;
+		let bottom = getWindowHeight();
+		for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+			if (window.getComputedStyle(parent).overflowY !== "visible") {
+				const rect = parent.getBoundingClientRect();
+				top = Math.max(top, rect.top);
+				bottom = Math.min(bottom, rect.bottom);
+			}
+		}
+		return { top, bottom };
+	}
+
+	/**
+	 * @returns {boolean} Whether the focused element is still attached and scrolled into view
+	 */
+	function isFocusedElementVisible() {
+		if (!focusedElement || !focusedElement.isConnected) {
+			return false;
+		}
+		const rect = focusedElement.getBoundingClientRect();
+		const range = getVisibleRange(focusedElement);
+		return rect.width > 0 && rect.top >= range.top && rect.top <= range.bottom;
+	}
+
 	function isWithinHorizontalBounds() {
 		return birdX >= focusedBounds.left && birdX <= focusedBounds.right;
 	}
@@ -1379,7 +1414,8 @@ function startApplication(birbPixels, featherPixels, hatsPixels) {
 		const elements = document.querySelectorAll(selectors.join(", "));
 		const inWindow = Array.from(elements).filter((img) => {
 			const rect = img.getBoundingClientRect();
-			return rect.left >= 0 && rect.top >= MIN_FOCUS_ELEMENT_TOP && rect.right <= window.innerWidth && rect.top <= getWindowHeight();
+			const range = getVisibleRange(img);
+			return rect.left >= 0 && rect.top >= Math.max(MIN_FOCUS_ELEMENT_TOP, range.top) && rect.right <= window.innerWidth && rect.top <= range.bottom;
 		});
 		const visible = Array.from(inWindow).filter((img) => {
 			const style = window.getComputedStyle(img);
