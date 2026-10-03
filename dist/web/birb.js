@@ -2763,7 +2763,7 @@
 			}),
 			new Separator(),
 			new MenuItem(() => `Source Code ${isPetBoostActive() ? " ❤" : ""}`, () => { window.open("https://github.com/IdreesInc/Pocket-Bird"); }),
-			new MenuItem("Build 2026.7.30", () => { alert("Thank you for using Pocket Bird! You are on version: 2026.7.30"); }, undefined, false),
+			new MenuItem("Build 2026.10.2", () => { alert("Thank you for using Pocket Bird! You are on version: 2026.10.2"); }, undefined, false),
 		];
 
 		/** @type {Birb} */
@@ -3066,6 +3066,10 @@
 			// Update the bird's position
 			if (currentState === States.IDLE) {
 				if (focusedElement && !isWithinHorizontalBounds()) {
+					flyToElement();
+				} else if (focusedElement && !isFocusedElementVisible()) {
+					// Keep the flight from starting off screen
+					birdY = Math.min(birdY, getWindowHeight());
 					flyToElement();
 				}
 				birdY = getFocusedY();
@@ -3750,6 +3754,37 @@
 			return Math.random() * (focusedBounds.right - focusedBounds.left) + focusedBounds.left;
 		}
 
+		/**
+		 * Get the vertical range of the page in which an element can be seen, taking
+		 * scrolling ancestors into account (e.g. a feed scrolling below a header)
+		 * @param {Element} element
+		 * @returns {{top: number, bottom: number}}
+		 */
+		function getVisibleRange(element) {
+			let top = 0;
+			let bottom = getWindowHeight();
+			for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+				if (window.getComputedStyle(parent).overflowY !== "visible") {
+					const rect = parent.getBoundingClientRect();
+					top = Math.max(top, rect.top);
+					bottom = Math.min(bottom, rect.bottom);
+				}
+			}
+			return { top, bottom };
+		}
+
+		/**
+		 * @returns {boolean} Whether the focused element is still attached and scrolled into view
+		 */
+		function isFocusedElementVisible() {
+			if (!focusedElement || !focusedElement.isConnected) {
+				return false;
+			}
+			const rect = focusedElement.getBoundingClientRect();
+			const range = getVisibleRange(focusedElement);
+			return rect.width > 0 && rect.top >= range.top && rect.top <= range.bottom;
+		}
+
 		function isWithinHorizontalBounds() {
 			return birdX >= focusedBounds.left && birdX <= focusedBounds.right;
 		}
@@ -3766,7 +3801,8 @@
 			const elements = document.querySelectorAll(getContext().getFocusableElements().join(", "));
 			const inWindow = Array.from(elements).filter((img) => {
 				const rect = img.getBoundingClientRect();
-				return rect.left >= 0 && rect.top >= MIN_FOCUS_ELEMENT_TOP && rect.right <= window.innerWidth && rect.top <= getWindowHeight();
+				const range = getVisibleRange(img);
+				return rect.left >= 0 && rect.top >= Math.max(MIN_FOCUS_ELEMENT_TOP, range.top) && rect.right <= window.innerWidth && rect.top <= range.bottom;
 			});
 			const visible = Array.from(inWindow).filter((img) => {
 				const style = window.getComputedStyle(img);
